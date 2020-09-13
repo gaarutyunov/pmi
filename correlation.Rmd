@@ -1,0 +1,69 @@
+```{r}
+## Подключение необходимых библиотек
+
+library(xts)
+library(quantmod)
+library(forecast)
+library(stats)
+library(tidyverse)
+```
+```{r}
+## Получение данных
+
+pmi_all = read_csv("pmi.csv") ## https://www.quandl.com/data/ISM/MAN_PMI-PMI-Composite-Index
+pmi = subset(pmi_all, Date >= "2000-01-01")
+pmi = subset(pmi, Date <= "2020-07-01")
+
+GSPC_all <- getSymbols("^GSPC", from="1948-01-01", to="2020-07-01", periodicity = "monthly", auto.assign = FALSE)
+
+getSymbols("^GSPC", from="2000-01-01", to="2020-07-01", periodicity = "monthly")
+
+pmi.xts <- xts(pmi$PMI, order.by = pmi$Date)
+```
+```{r}
+## Графики для 2000-2020 года
+
+plot(pmi.xts, main = "PMI", type = "l")
+plot(GSPC$GSPC.Close, main = "S&P 500", type = "l")
+```
+```{r}
+## Декомпозиция на сезонность, тренд и остаток
+
+pmi.stl <- stl(ts(as.numeric(pmi.xts), frequency=12), s.window="periodic", robust=TRUE) 
+plot(pmi.stl, main = "PMI")
+GSPC.stl <- stl(ts(as.numeric(GSPC$GSPC.Close), frequency=12), s.window="periodic", robust=TRUE) 
+plot(GSPC.stl, main = "S&P 500")
+```
+```{r}
+## Сезонность в 2000-2001 г
+
+t <- seq(as.Date("2000-01-01"), as.Date("2004-12-01"), by = "month")
+
+par(mfrow=c(1,1))
+plot(t, GSPC.stl$time.series[0:60,"seasonal"], xlab = "Year", ylab = "", type = "l", main = "Сезонность S&P 500 и PMI (красный) в 2000-2001")
+par(new=TRUE)
+plot(t, pmi.stl$time.series[0:60,"seasonal"], type = "l", xlab = "", ylab = "", main = "", col = "red", axes = FALSE)
+axis(side=4,col="red")
+```
+```{r}
+## Корреляция
+GSPC_all.ts <- ts(GSPC_all$GSPC.Close, start = c(1948, 1), end = c(2020, 7), frequency = 12)
+pmi_all.ts <- ts(pmi_all$PMI, start = c(1948, 1), end = c(2020, 7), frequency = 12)
+
+corr <- ccf(as.numeric(GSPC_all.ts), as.numeric(pmi_all.ts), plot = TRUE, ylab = "Корреляция", main = "Кросс-Корреляция S&P 500 и PMI", xlab = "Месяцев")
+```
+```{r}
+cor = corr$acf[,,1]
+lag = corr$lag[,,1]
+res = data.frame(cor,lag)
+res_max = res[which.max(res$cor),]
+res_min = res[which.min(res$cor),]
+
+message_max <- paste("Максимальная корреляция ", format(res_max$cor, digits = 2), " при лаге ", format(res_max$lag, digits = 2), " месяц")
+
+message_min <- paste("Минимальная корреляция ", format(res_min$cor, digits = 2), " при опережении ", format( abs(res_min$lag), digits = 2), " месяцев")
+
+print(message_max)
+print(message_min)
+```
+
